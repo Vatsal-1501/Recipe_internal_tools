@@ -15,7 +15,12 @@ long_press_duration = 500  # Duration in milliseconds to detect long press
 long_press_active = False  # To track if long press is active
 pygame.mixer.init()
 AUDIO_FOLDER_PATH = r"D:\new menu\mp3"
+<<<<<<< HEAD
 
+=======
+global error_cells
+error_cells = []
+>>>>>>> 80fdfc3 (add error handling)
 def play_audio(file_name):
     audio_file = os.path.join(AUDIO_FOLDER_PATH, file_name)
     
