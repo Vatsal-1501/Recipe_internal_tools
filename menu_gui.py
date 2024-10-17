@@ -3,6 +3,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox ,ttk
 import pygame 
 import os
+import threading
+import time
+import io
+import zipfile
 
 # Global variables
 ingredient_data = None  # Data for the ingredients table
@@ -14,38 +18,55 @@ default_color = "white"  # Default background color
 long_press_duration = 500  # Duration in milliseconds to detect long press
 long_press_active = False  # To track if long press is active
 pygame.mixer.init()
-AUDIO_FOLDER_PATH = r"D:\new menu\mp3"
-<<<<<<< HEAD
-
-=======
+AUDIO_FOLDER_PATH = r"D:\Recipe_internal_tools\mp3"
 global error_cells
 error_cells = []
->>>>>>> 80fdfc3 (add error handling)
-def play_audio(file_name):
+def change_cell_color(row, col, frame, color):
+    for widget in frame.grid_slaves(row=row, column=col):
+        if isinstance(widget, tk.Frame):
+            for label in widget.winfo_children():
+                if isinstance(label, tk.Label):
+                    if color:
+                        label.config(bg=color)
+                    else:
+                        # Reset to default color and style
+                        label.config(bg=default_color, font=('Arial', 10, 'underline'))
+def play_audio(file_name, row, col, frame):
     audio_file = os.path.join(AUDIO_FOLDER_PATH, file_name)
     
     if os.path.exists(audio_file):
-        pygame.mixer.music.load(audio_file)
-        pygame.mixer.music.play()
+        # Change cell color to light green
+        change_cell_color(row, col, frame, "light green")
+        
+        def play_and_reset():
+            pygame.mixer.music.load(audio_file)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.1)
+            # Reset cell color after audio finishes
+            root.after(0, lambda: change_cell_color(row, col, frame, None))
+        
+        # Start audio playback in a separate thread
+        threading.Thread(target=play_and_reset, daemon=True).start()
     else:
         print(f"Audio file {audio_file} not found!")
+        # Change cell color to red
+        change_cell_color(row, col, frame, "red") 
+        # Reset cell color after 2 seconds
+        root.after(1500, lambda: change_cell_color(row, col, frame, None))
 
 # Function to handle left-click on the audioP column (column index 5)
 def on_audio_click(row, col):
-    audio_value = ingredient_data[row][col]  # Get the value of the audioP column
-    
+    audio_value = ingredient_data[row][col]
     if audio_value:
-        # Construct the audio file name based on the text in the cell
         audio_file_name = f"{audio_value}.mp3"
-        play_audio(audio_file_name)
-def on_instruction_audio_click(row, col):
+        play_audio(audio_file_name, row, col, ingredients_frame)
 
-    audio_value = instruction_data[row][col]  # Get the value of the audio column
-    
+def on_instruction_audio_click(row, col):
+    audio_value = instruction_data[row][col]
     if audio_value:
-        # Construct the audio file name based on the text in the cell
         audio_file_name = f"{audio_value}.mp3"
-        play_audio(audio_file_name)
+        play_audio(audio_file_name, row, col, instructions_frame)
 
 def check_for_errors(data_table, frame):
     error_cells = []
@@ -57,16 +78,19 @@ def check_for_errors(data_table, frame):
             if frame == instructions_frame and j == 10:  # Stirrer column
                 if value not in ["0", "1", "2", "3", "4", ""]:
                     is_error = True
-            
-            # Add more conditions here for other columns as needed
-            # For example:
-            # elif frame == instructions_frame and j == 20:  # Skip column
-            #     if value.lower() not in ["true", "false", ""]:
-            #         is_error = True
-            # elif frame == instructions_frame and j == 7:  # Lid status column
-            #     if value.lower() not in ["open", "close", ""]:
-            #         is_error = True
-            # ... and so on for other columns
+            elif frame == instructions_frame and j == 20:  # Skip column
+                if value.lower() not in ["true", "false", ""]:
+                    is_error = True
+            elif frame == instructions_frame and j == 7:  # Lid status column
+                if value.lower() not in ["open", "close", ""]:
+                    is_error = True
+            elif frame == instructions_frame and j== 3:
+                if value.lower() not in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", ""]:
+                    is_error = True
+
+            elif frame == instructions_frame and j== 12:
+                if value.lower() not in ["0", "20", "40", "60", "80", "100", ""]:
+                    is_error = True
 
             if is_error:
                 error_cells.append((i, j))
@@ -78,16 +102,28 @@ def load_json():
     global ingredient_data, instruction_data  # Declare ingredient_data and instruction_data as global
     
     # Open file dialog to select JSON file
-    file_path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt")])
+    file_path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"),("Zip Files","*.zip")])
     
     if not file_path:
         return
     
     try:
-        # Load JSON file
-        with open(file_path, 'r') as file:
-            global data
-            data = json.load(file)
+        if file_path.lower().endswith('.zip'):
+            # Handle ZIP file
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                json_files = [f for f in zip_ref.namelist() if f.lower().endswith('.txt')]
+                if not json_files:
+                    raise ValueError("No JSON file found in the ZIP archive")
+                
+                # Use the first JSON file found
+                json_file = json_files[0]
+                with zip_ref.open(json_file) as file:
+                    data = json.load(io.TextIOWrapper(file))
+        else:
+            # Handle regular JSON file
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+
 
         # Set recipe name at the heading
         recipe_name = data.get("name", ["Unknown Recipe"])[0]
@@ -192,37 +228,7 @@ def add_instruction():
     clear_table(instructions_frame)  # Clear the current table
     display_instructions_table(instruction_data)  # Refresh the instructions table
     
-
 # Function to display the ingredients table
-def display_ingredients_table(data):
-    global selected_row
-    for i, row in enumerate(data):
-        for j, value in enumerate(row):
-            cell = tk.Frame(ingredients_frame, bg=default_color if i != selected_row else highlight_color, relief="solid", borderwidth=1)
-            cell.grid(row=i, column=j, sticky="nsew", padx=1, pady=1)
-            
-            label = tk.Label(cell, text=str(value), font=('Arial', 10), bg=default_color if i != selected_row else highlight_color, anchor='center')
-            label.pack(side='left', fill='both', expand=True)
-            
-            if i > 0:  # Skip the header
-                label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, ingredient_data, ingredients_frame))
-                
-                # Detect long press (right-click hold) for selecting row
-            if j == 4:  # Index of the audioP column
-                    label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
-            elif j == 5:  # Index of the audioP column
-               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
-            elif j == 6:  # Index of the audioQ column
-               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
-            elif j == 7:  # Index of the audioU column
-               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))    
-
-    # Make the columns resize equally
-    for j in range(len(data[0])):
-        ingredients_frame.grid_columnconfigure(j, weight=1)
-
-
-# Function to display the instructions table
 def display_instructions_table(data):
     global selected_row, error_cells
     error_cells = check_for_errors(data, instructions_frame)
@@ -239,8 +245,15 @@ def display_instructions_table(data):
             else:
                 bg_color = default_color
             
-            label = tk.Label(cell, text=str(value), font=('Arial', 10), bg=bg_color, anchor='center')
+            # Determine if the cell should be underlined (audio-related columns)
+            underline = (j in [16, 17, 18, 19] and i > 0)  # AudioI, AudioP, AudioQ, AudioU columns
+            
+            label = tk.Label(cell, text=str(value), font=('Arial', 10, 'underline' if underline else ''),
+                             bg=bg_color, anchor='center')
             label.pack(side='left', fill='both', expand=True)
+
+            if j in [16, 17, 18, 19]:  # AudioI, AudioP, AudioQ, AudioU columns
+              label.bind("<Button-1>", lambda event, r=i, c=j: on_instruction_audio_click(r, c))
             
             if i > 0:  # Skip the header
                 label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, instruction_data, instructions_frame))
@@ -260,6 +273,41 @@ def display_instructions_table(data):
     # Make the columns resize equally
     for j in range(len(data[0])):
         instructions_frame.grid_columnconfigure(j, weight=1)
+
+def display_ingredients_table(data):
+    global selected_row
+    for i, row in enumerate(data):
+        for j, value in enumerate(row):
+            cell = tk.Frame(ingredients_frame, bg=default_color if i != selected_row else highlight_color, relief="solid", borderwidth=1)
+            cell.grid(row=i, column=j, sticky="nsew", padx=1, pady=1)
+
+            
+            # Determine if the cell should be underlined (audio-related columns)
+            underline = (j in [4, 5, 6, 7] and i > 0)  # audio, audioI, audioP, audioQ, audioU columns
+            
+            label = tk.Label(cell, text=str(value), font=('Arial', 10, 'underline' if underline else ''),
+                             bg=default_color if i != selected_row else highlight_color, anchor='center')
+            label.pack(side='left', fill='both', expand=True)
+            
+            if j in [4, 5, 6, 7]:  # audio, audioI, audioP, audioQ, audioU columns
+              label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
+
+            if i > 0:  # Skip the header
+                label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, ingredient_data, ingredients_frame))
+                
+                # Detect long press (right-click hold) for selecting row
+            if j == 4:  # Index of the audioP column
+                    label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
+            elif j == 5:  # Index of the audioP column
+               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
+            elif j == 6:  # Index of the audioQ column
+               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
+            elif j == 7:  # Index of the audioU column
+               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))    
+
+    # Make the columns resize equally
+    for j in range(len(data[0])):
+        ingredients_frame.grid_columnconfigure(j, weight=1)
 
 
 
@@ -405,8 +453,35 @@ def edit_cell(row, col, data_table, frame):
         new_value = entry.get()
         old_value = data_table[row][col]
         data_table[row][col] = new_value
+        if frame == instructions_frame and col == 6:  # Assuming duration is in column 6
+            try:
+                duration = int(new_value)
+                if duration < 0 or duration > 5999:  # 99 minutes 59 seconds
+                    raise ValueError("Duration must be between 0 and 5999 seconds")
+                
+                # Update duration
+                data_table[row][col] = str(duration)
+                
+                # Update AudioU (assuming it's in column 7)
+                if duration < 60:
+                    audio_u = f"{duration}Second"
+                else:
+                    minutes = duration // 60
+                    seconds = duration % 60
+                    if seconds == 0:
+                        audio_u = f"{minutes}Minute"
+                    else:
+                        audio_u = f"{minutes}Minute{seconds}Second"
+                
+                data_table[row][19] = audio_u
+            except ValueError as e:
+                messagebox.showerror("Invalid Input", str(e))
+                return
+        else:
+            data_table[row][col] = new_value
         
         # Apply validation if this is the instruction table
+    
         if frame == instructions_frame:
             if col == 20:  
                 if not validate_skip(new_value):
@@ -433,14 +508,60 @@ def edit_cell(row, col, data_table, frame):
         if frame == ingredients_frame:
             if col == 0:  # Name in Ingredients
                 update_name_in_instructions(old_value, new_value)
+                # Sync Name, Action middle word, and AudioI
+                sync_ingredient_columns(row, new_value, data_table)
             elif col == 1:  # Weight in Ingredients
                 update_weight_in_instructions(data_table[row][0], new_value)
+            elif col in [3, 5]:  # audio or audioI column
+                data_table[row][3] = new_value  # Update audio
+                data_table[row][5] = new_value  # Update audioI
+                
+                # Update the first word of the action column
+                action_parts = data_table[row][2].split()
+                if len(action_parts) >= 3:
+                    action_parts[0] = new_value
+                    data_table[row][2] = ' '.join(action_parts)
+                else:
+                    # If action doesn't have enough parts, just prepend the new value
+                    data_table[row][2] = f"{new_value} {data_table[row][2]}"
+
+            elif col == 2:  # action column
+                action_parts = new_value.split()
+                if len(action_parts) >= 3:
+                    data_table[row][0] = action_parts[1]  # Update Name
+                    data_table[row][3] = action_parts[0]  # Update audio
+                    data_table[row][5] = action_parts[1]  # Update audioI
+                elif len(action_parts) >= 1:
+                    data_table[row][3] = action_parts[0]  # Update audio
+                    data_table[row][5] = action_parts[0]  # Update audioI
+        
         elif frame == instructions_frame:
             if col == 4:  # Text in Instructions
                 update_name_in_ingredients(old_value, new_value)
             elif col == 5:  # Weight in Instructions
                 update_weight_in_ingredients(data_table[row][4], new_value)
+            if col in [1, 17]:  # procedure or AudioP column
+                print("Syncing procedure/AudioP in instructions")
+                data_table[row][1] = new_value  # Update procedure
+                data_table[row][17] = new_value  # Update AudioP
+                
+                # Update the first word of the action column
+                action_parts = data_table[row][13].split()
+                if action_parts:
+                    action_parts[0] = new_value
+                    data_table[row][13] = ' '.join(action_parts)
+                else:
+                    data_table[row][13] = new_value
+                print(f"Updated action to: {data_table[row][13]}")
 
+            elif col == 13:  # action column
+                print("Syncing action in instructions")
+                action_parts = new_value.split()
+                if action_parts:
+                    first_word = action_parts[0]
+                    data_table[row][1] = first_word  # Update procedure
+                    data_table[row][17] = first_word  # Update AudioP
+                print(f"Updated procedure to: {data_table[row][1]}, AudioP to: {data_table[row][17]}")
         # Clear the current table and refresh both tables
         clear_table(ingredients_frame)
         clear_table(instructions_frame)
@@ -451,6 +572,21 @@ def edit_cell(row, col, data_table, frame):
     entry.bind("<Return>", lambda event: save_value())
     entry.focus_set()  # Focus on the entry widget
 # Function to update the name in the instructions table
+def sync_ingredient_columns(row, new_value, data_table):
+    # Update Name
+    data_table[row][0] = new_value
+    
+    # Update middle word of Action
+    action_parts = data_table[row][2].split()
+    if len(action_parts) >= 3:
+        action_parts[1] = new_value
+        data_table[row][2] = ' '.join(action_parts)
+    else:
+        # If action doesn't have enough parts, just append the new value
+        data_table[row][2] += f" {new_value}"
+    
+    # Update AudioI
+    data_table[row][5] = new_value
 def update_name_in_instructions(old_name, new_name):
     for instruction in instruction_data[1:]:  # Skip header
         if instruction[4] == old_name:  # Match the text column
@@ -506,14 +642,22 @@ def update_action_and_audio(item_name, new_weight, frame):
     elif frame == instructions_frame:
         for instruction in instruction_data[1:]:
             if instruction[4] == item_name:
-                print(f"Found instruction '{item_name}'. Updating weight and AudioQ.")
+                print(f"Found instruction '{item_name}'. Updating weight and related fields.")
                 instruction[5] = new_weight
+                
+                # Preserve the first word of the action
+                action_parts = instruction[13].split()
+                first_word = action_parts[0] if action_parts else instruction[1]  # Use procedure as fallback
+                instruction[13] = f"{first_word} {numeric_weight} {unit}"
+                
                 instruction[18] = numeric_weight
+                instruction[19] = unit
+                print(f"Updated instruction action to: {instruction[13]}")
 
                 for ingredient in ingredient_data[1:]:
                     if ingredient[0] == item_name:
                         ingredient[1] = new_weight
-                        ingredient[2] = f"{item_name} {numeric_weight} {unit}"
+                        ingredient[2] = f"{ingredient[2].split()[0]} {numeric_weight} {unit}"
                         ingredient[6] = numeric_weight
                         ingredient[7] = unit
                         print(f"Updated Weight and Action for Ingredient '{ingredient[0]}' to {new_weight} and {ingredient[2]}")
@@ -640,7 +784,7 @@ root = tk.Tk()
 root.title("Recipe Editor")
 
 # Set up the title label
-title_label = tk.Label(root, text="Recipe: Unknown", font=('Arial', 14))
+title_label = tk.Label(root, text="Recipe: Choose your recipe", font=('Arial', 14))
 title_label.pack(pady=10)
 
 # Set up the frame for the ingredients table
@@ -691,4 +835,4 @@ prt3_button.pack(side='left', padx=5)
 prt4_button = tk.Button(button_frame, text="prt4", command=lambda: prt_action("prt4"))
 prt4_button.pack(side='left', padx=5)
 # Run the tkinter event loop
-root.mainloop()
+root.mainloop() 
