@@ -17,6 +17,7 @@ highlight_color = "yellow"  # Color for highlighting the selected row
 default_color = "white"  # Default background color
 long_press_duration = 500  # Duration in milliseconds to detect long press
 long_press_active = False  # To track if long press is active
+
 pygame.mixer.init()
 AUDIO_FOLDER_PATH = r"D:\Recipe_internal_tools\mp3"
 global error_cells
@@ -75,22 +76,22 @@ def check_for_errors(data_table, frame):
             continue
         for j, value in enumerate(row):
             is_error = False
-            if frame == instructions_frame and j == 10:  # Stirrer column
-                if value not in ["0", "1", "2", "3", "4", ""]:
-                    is_error = True
-            elif frame == instructions_frame and j == 20:  # Skip column
-                if value.lower() not in ["true", "false", ""]:
-                    is_error = True
-            elif frame == instructions_frame and j == 7:  # Lid status column
-                if value.lower() not in ["open", "close", ""]:
-                    is_error = True
-            elif frame == instructions_frame and j== 3:
-                if value.lower() not in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", ""]:
-                    is_error = True
-
-            elif frame == instructions_frame and j== 12:
-                if value.lower() not in ["0", "20", "40", "60", "80", "100", ""]:
-                    is_error = True
+            if frame == instructions_frame:
+                if j == 10:  # Stirrer column
+                    if str(value).strip() not in ["0", "1", "2", "3", "4", ""]:
+                        is_error = True
+                elif j == 20:  # Skip column
+                    if str(value).strip().lower() not in ["true", "false", ""]:
+                        is_error = True
+                elif j == 7:  # Lid status column
+                    if str(value).strip().lower() not in ["open", "close", ""]:
+                        is_error = True
+                elif j == 3:  # Induction power column
+                    if str(value).strip() not in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", ""]:
+                        is_error = True
+                elif j == 12:  # Magnetron power column
+                    if str(value).strip() not in ["0", "20", "40", "60", "80", "100", ""]:
+                        is_error = True
 
             if is_error:
                 error_cells.append((i, j))
@@ -150,7 +151,7 @@ def format_ingredients(data):
     ingredients = data.get("Ingredients", [])
     
     # Column names: Name, Weight, and Action
-    column_names = ['Name', 'Weight', 'Action','audio','audioI','audioP','audioQ','audioU']
+    column_names = ['Name', 'Weight', 'Action','audio','audioI','audioP','audioQ','audioU','Image','Text']
     
     # Loop through the ingredients and extract the relevant fields
     for ingredient in ingredients:
@@ -162,7 +163,9 @@ def format_ingredients(data):
         audioP = ingredient.get("audioP", "")
         audioQ = ingredient.get("audioQ", "")
         audioU = ingredient.get("audioU", "")
-        rows.append([name, weight, action,audio,audioI,audioP,audioQ,audioU])
+        Image = ingredient.get("image","")
+        Text = ingredient.get("text","")
+        rows.append([name, weight, action,audio,audioI,audioP,audioQ,audioU,Image,Text])
     
     # Include headers in the first row
     return [column_names] + rows
@@ -176,12 +179,13 @@ def format_instructions(data):
     column_names = ['Step', 'Procedure', 'Induction On Time', 'Induction Power', 
                     'Text', 'Weight', 'Duration (s)', 'Lid Status', 
                     'Wait Time (s)', 'Warm Time (s)', 'Stirrer', 
-                    'Mag On Time', 'Mag Power', 'Action', 'Mag Serv', 'Pump','AudioI','AudioP','AudioQ','AudioU','skip']
+                    'Mag On Time', 'Mag Power', 'Action', 'Mag Serv', 'Pump','AudioI','AudioP','AudioQ','AudioU','skip','Ind_lid_con']
     
     # Loop through the instructions and format the data
     for i, instruction in enumerate(instructions):
         step = f"Step {i + 1}"
         procedure = instruction.get("Audio", "")  # Fetch 'audio' as 'procedure'
+        ind_lid_con = instruction.get("Indtime_lid_con","")
         ind_on_time = instruction.get("Induction_on_time", 0)
         ind_power = instruction.get("Induction_power", 0)
         mag_on_time = instruction.get("Magnetron_on_time", 0)
@@ -201,11 +205,11 @@ def format_instructions(data):
         AudioQ = instruction.get("audioQ",0)
         AudioU = instruction.get("audioU",0)
         skip = instruction.get("skip",0)
-              
+        ind_lid_con = instruction.get("Indtime_lid_con","")    
         # Append row data
-        rows.append([step, procedure, ind_on_time, ind_power, text, weight, 
+        rows.append([step, procedure,ind_on_time, ind_power, text, weight, 
                      duration, lid_status, wait_time, warm_time, stirrer, 
-                     mag_on_time, mag_power, action, mag_serv, pump,AudioI,AudioP,AudioQ,AudioU,skip])
+                     mag_on_time, mag_power, action, mag_serv, pump,AudioI,AudioP,AudioQ,AudioU,skip,ind_lid_con])
     
     # Include headers in the first row
     return [column_names] + rows
@@ -216,7 +220,7 @@ def clear_table(frame):
     for widget in frame.winfo_children():
         widget.destroy()
 def add_ingredient():
-    ingredient_data.append(["New Ingredient", "0", "","","","","0",""])  # Add a new ingredient row
+    ingredient_data.append(["New Ingredient", "0", "","","","","0","","",""])  # Add a new ingredient row
     clear_table(ingredients_frame)  # Clear the current table
     display_ingredients_table(ingredient_data)  # Refresh the ingredients table
 
@@ -224,7 +228,7 @@ def add_ingredient():
 def add_instruction():
     # Determine the next step number
     next_step_number = len(instruction_data)  # Current length gives the next step number
-    instruction_data.append([f"Step {next_step_number}", "", 0, 0, "", "0", 0, "N/A", 0, 0, 0, 0, 0, "", "", 0,"","","","",""])  # Add a new instruction row
+    instruction_data.append([f"Step {next_step_number}", "", 0, 0, "", "0", 0, "N/A", 0, 0, 0, 0, 0, "", "", 0,"","","","","",""])  # Add a new instruction row
     clear_table(instructions_frame)  # Clear the current table
     display_instructions_table(instruction_data)  # Refresh the instructions table
     
@@ -431,194 +435,117 @@ def edit_cell(row, col, data_table, frame):
     entry = tk.Entry(frame, font=('Arial', 10))
     entry.insert(0, current_value)
     entry.grid(row=row, column=col, sticky="nsew")
-
-    # Define validation functions as previously
-    def validate_skip(value):
-        return value.lower() in ["true", "false", ""]
-
-    def validate_Stirrer(value):
-        return value.lower() in ["0", "1", "2", "3", "4", ""]
-
-    def validate_Lid(value):
-        return value.lower() in ["close", "open", ""]
-
-    def validate_induction(value):
-        return value.lower() in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", ""]
-
-    def validate_magnetron(value):
-        return value.lower() in ["0", "20", "40", "60", "80", "100"]
-
-    # Define save function to update the value and clear the entry
+    
     def save_value():
         new_value = entry.get()
         old_value = data_table[row][col]
-        data_table[row][col] = new_value
-        if frame == instructions_frame and col == 6:  # Assuming duration is in column 6
-            try:
-                duration = int(new_value)
-                if duration < 0 or duration > 5999:  # 99 minutes 59 seconds
-                    raise ValueError("Duration must be between 0 and 5999 seconds")
-                
-                # Update duration
-                data_table[row][col] = str(duration)
-                
-                # Update AudioU (assuming it's in column 7)
-                if duration < 60:
-                    audio_u = f"{duration}Second"
-                else:
-                    minutes = duration // 60
-                    seconds = duration % 60
-                    if seconds == 0:
-                        audio_u = f"{minutes}Minute"
-                    else:
-                        audio_u = f"{minutes}Minute{seconds}Second"
-                
-                data_table[row][19] = audio_u
-            except ValueError as e:
-                messagebox.showerror("Invalid Input", str(e))
-                return
-        else:
-            data_table[row][col] = new_value
         
-        # Apply validation if this is the instruction table
-    
-        if frame == instructions_frame:
-            if col == 20:  
-                if not validate_skip(new_value):
-                    messagebox.showerror("Invalid Value", "The 'Skip' column can only accept 'true', 'false', or be blank.")
-                    return  # Do not save if validation fails
-            if col == 10:  
-                if not validate_Stirrer(new_value):
-                    messagebox.showerror("Invalid Value", "The 'Stirrer' column can only accept values from '0 to 4' or be blank.")
-                    return  # Do not save if validation fails
-            if col == 7:  
-                if not validate_Lid(new_value):
-                    messagebox.showerror("Invalid Value", "The 'Lid_status' column can only accept 'open', 'close' or be blank.")
-                    return  # Do not save if validation fails
-            if col == 3: 
-                if not validate_induction(new_value):
-                    messagebox.showerror("Invalid Value", "The 'Induction' column can only accept value in terms 10x or be blank.")
-                    return  # Do not save if validation fails
-            if col == 12:  
-                if not validate_magnetron(new_value):
-                    messagebox.showerror("Invalid Value", "The 'Magnetron' column can only accept value in terms of 20x or be blank.")
-                    return  # Do not save if validation fails
-        
-        # Update corresponding weight in the opposite table if the edited column is weight
         if frame == ingredients_frame:
-            if col == 0:  # Name in Ingredients
-                update_name_in_instructions(old_value, new_value)
-                # Sync Name, Action middle word, and AudioI
-                sync_ingredient_columns(row, new_value, data_table)
-            elif col == 1:  # Weight in Ingredients
-                update_weight_in_instructions(data_table[row][0], new_value)
-            elif col in [3, 5]:  # audio or audioI column
-                data_table[row][3] = new_value  # Update audio
-                data_table[row][5] = new_value  # Update audioI
-                
-                # Update the first word of the action column
-                action_parts = data_table[row][2].split()
-                if len(action_parts) >= 3:
-                    action_parts[0] = new_value
-                    data_table[row][2] = ' '.join(action_parts)
-                else:
-                    # If action doesn't have enough parts, just prepend the new value
-                    data_table[row][2] = f"{new_value} {data_table[row][2]}"
-
-            elif col == 2:  # action column
-                action_parts = new_value.split()
-                if len(action_parts) >= 3:
-                    data_table[row][0] = action_parts[1]  # Update Name
-                    data_table[row][3] = action_parts[0]  # Update audio
-                    data_table[row][5] = action_parts[1]  # Update audioI
-                elif len(action_parts) >= 1:
-                    data_table[row][3] = action_parts[0]  # Update audio
-                    data_table[row][5] = action_parts[0]  # Update audioI
+            if col == 0:  # Name
+                update_name(old_value, new_value, ingredients_frame)
+            elif col == 1:  # Weight
+                update_weight(data_table[row][0], new_value, ingredients_frame)
+            elif col in [2, 3, 5]:  # Action, audio, audioP
+                update_action_audio(row, col, new_value, ingredients_frame)
         
         elif frame == instructions_frame:
-            if col == 4:  # Text in Instructions
-                update_name_in_ingredients(old_value, new_value)
-            elif col == 5:  # Weight in Instructions
-                update_weight_in_ingredients(data_table[row][4], new_value)
-            if col in [1, 17]:  # procedure or AudioP column
-                print("Syncing procedure/AudioP in instructions")
-                data_table[row][1] = new_value  # Update procedure
-                data_table[row][17] = new_value  # Update AudioP
-                
-                # Update the first word of the action column
-                action_parts = data_table[row][13].split()
-                if action_parts:
-                    action_parts[0] = new_value
-                    data_table[row][13] = ' '.join(action_parts)
-                else:
-                    data_table[row][13] = new_value
-                print(f"Updated action to: {data_table[row][13]}")
+            if col == 4:  # Text
+                update_name(old_value, new_value, instructions_frame)
+            elif col == 5:  # Weight
+                update_weight(data_table[row][4], new_value, instructions_frame)
+            elif col in [1, 13, 17]:  # Procedure, Action, audioP
+                update_action_audio(row, col, new_value, instructions_frame)
+            
+            # Apply validation for instruction table
+            if not validate_instruction_input(col, new_value):
+                entry.delete(0, tk.END)
+                entry.insert(0, old_value)
+                return
 
-            elif col == 13:  # action column
-                print("Syncing action in instructions")
-                action_parts = new_value.split()
-                if action_parts:
-                    first_word = action_parts[0]
-                    data_table[row][1] = first_word  # Update procedure
-                    data_table[row][17] = first_word  # Update AudioP
-                print(f"Updated procedure to: {data_table[row][1]}, AudioP to: {data_table[row][17]}")
-        # Clear the current table and refresh both tables
+        data_table[row][col] = new_value
+        
+        # Clear and refresh both tables
         clear_table(ingredients_frame)
         clear_table(instructions_frame)
         display_ingredients_table(ingredient_data)
         display_instructions_table(instruction_data)
 
+        # Remove the entry widget
+        entry.destroy()
+
     # Bind the return key to save the new value
     entry.bind("<Return>", lambda event: save_value())
-    entry.focus_set()  # Focus on the entry widget
-# Function to update the name in the instructions table
-def sync_ingredient_columns(row, new_value, data_table):
-    # Update Name
-    data_table[row][0] = new_value
+    entry.bind("<FocusOut>", lambda event: save_value())
+    entry.focus_set()
+
+def validate_instruction_input(col, value):
+    value_str = str(value).strip()
+    if col == 20 and not validate_skip(value_str):
+        messagebox.showerror("Invalid Value", "The 'Skip' column can only accept 'true', 'false', or be blank.")
+        return False
+    if col == 10 and not validate_Stirrer(value_str):
+        messagebox.showerror("Invalid Value", "The 'Stirrer' column can only accept values from '0 to 4' or be blank.")
+        return False
+    if col == 7 and not validate_Lid(value_str):
+        messagebox.showerror("Invalid Value", "The 'Lid_status' column can only accept 'open', 'close' or be blank.")
+        return False
+    if col == 3 and not validate_induction(value_str):
+        messagebox.showerror("Invalid Value", "The 'Induction' column can only accept value in terms 10x or be blank.")
+        return False
+    if col == 12 and not validate_magnetron(value_str):
+        messagebox.showerror("Invalid Value", "The 'Magnetron' column can only accept value in terms of 20x or be blank.")
+        return False
+    return True
+
+def validate_skip(value):
+    return value.lower() in ["true", "false", ""]
+
+def validate_Stirrer(value):
+    return value in ["0", "1", "2", "3", "4", ""]
+
+def validate_Lid(value):
+    return value.lower() in ["open", "close", ""]
+
+def validate_induction(value):
+    return value in ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100", ""]
+
+def validate_magnetron(value):
+    return value in ["0", "20", "40", "60", "80", "100", ""]
+
+def update_name(old_name, new_name, frame):
+    if frame == ingredients_frame:
+        for ingredient in ingredient_data[1:]:
+            if ingredient[0] == old_name:
+                ingredient[0] = new_name  # Name
+                ingredient[2] = update_middle_word(ingredient[2], new_name)  # Action
+                ingredient[4] = new_name  # AudioI
+        
+        for instruction in instruction_data[1:]:
+            if instruction[4] == old_name:
+                instruction[4] = new_name  # Text
+                instruction[13] = update_last_word(instruction[13], new_name)  # Action
+                instruction[16] = new_name  # AudioI
     
-    # Update middle word of Action
-    action_parts = data_table[row][2].split()
-    if len(action_parts) >= 3:
-        action_parts[1] = new_value
-        data_table[row][2] = ' '.join(action_parts)
-    else:
-        # If action doesn't have enough parts, just append the new value
-        data_table[row][2] += f" {new_value}"
-    
-    # Update AudioI
-    data_table[row][5] = new_value
-def update_name_in_instructions(old_name, new_name):
-    for instruction in instruction_data[1:]:  # Skip header
-        if instruction[4] == old_name:  # Match the text column
-            instruction[4] = new_name  # Update text in Instructions
-            break
+    elif frame == instructions_frame:
+        for instruction in instruction_data[1:]:
+            if instruction[4] == old_name:
+                instruction[4] = new_name  # Text
+                instruction[13] = update_last_word(instruction[13], new_name)  # Action
+                instruction[16] = new_name  # AudioI
+        
+        for ingredient in ingredient_data[1:]:
+            if ingredient[0] == old_name:
+                ingredient[0] = new_name  # Name
+                ingredient[2] = update_middle_word(ingredient[2], new_name)  # Action
+                ingredient[5] = new_name  # AudioI
 
-def update_name_in_ingredients(old_name, new_name):
-    for ingredient in ingredient_data[1:]:  # Skip header
-        if ingredient[0] == old_name:  # Match the name column
-            ingredient[0] = new_name  # Update name in Ingredients
-            break
+def update_middle_word(action, new_word):
+    words = action.split()
+    if len(words) >= 3:
+        words[1] = new_word
+    return ' '.join(words)
 
-def update_weight_in_instructions(ingredient_name, new_weight):
-    for instruction in instruction_data[1:]:  # Skip header
-        if instruction[4] == ingredient_name:  # Match the text column
-            instruction[5] = new_weight  # Update weight in Instructions
-            # Update related fields
-            update_action_and_audio(ingredient_name, new_weight, instructions_frame)
-            break
-
-def update_weight_in_ingredients(instruction_text, new_weight):
-    for ingredient in ingredient_data[1:]:  # Skip header
-        if ingredient[0] == instruction_text:  # Match the name column
-            ingredient[1] = new_weight  # Update weight in Ingredients
-            # Update related fields
-            update_action_and_audio(instruction_text, new_weight, ingredients_frame)
-            break
-
-def update_action_and_audio(item_name, new_weight, frame):
-    print(f"Updating '{item_name}' in frame '{frame}' with new weight '{new_weight}'")
-    
-    # Split the weight into numeric and unit parts
+def update_weight(item_name, new_weight, frame):
     weight_parts = new_weight.split()
     numeric_weight = weight_parts[0] if weight_parts else "0"
     unit = weight_parts[1] if len(weight_parts) > 1 else ""
@@ -626,148 +553,207 @@ def update_action_and_audio(item_name, new_weight, frame):
     if frame == ingredients_frame:
         for ingredient in ingredient_data[1:]:
             if ingredient[0] == item_name:
-                print(f"Found ingredient '{item_name}'. Updating weight and action.")
-                ingredient[1] = new_weight
-                ingredient[2] = f"{item_name} {numeric_weight} {unit}"
-                ingredient[6] = numeric_weight
-                ingredient[7] = unit
-
-                for instruction in instruction_data[1:]:
-                    if instruction[4] == item_name:
-                        instruction[5] = new_weight
-                        instruction[18] = numeric_weight
-                        print(f"Updated Weight and AudioQ for Instruction '{instruction[0]}' to {new_weight} and {numeric_weight}")
-        return
-
+                ingredient[1] = new_weight  # Weight
+                ingredient[2] = update_last_two_words(ingredient[2], numeric_weight, unit)  # Action
+                ingredient[6] = numeric_weight  # AudioQ
+                ingredient[7] = unit  # AudioU
+        
+        for instruction in instruction_data[1:]:
+            if instruction[4] == item_name:
+                instruction[5] = new_weight  # Weight
+                instruction[13] = update_last_two_words(instruction[13], numeric_weight, unit)  # Action
+                instruction[18] = numeric_weight  # AudioQ
+                
+    
     elif frame == instructions_frame:
         for instruction in instruction_data[1:]:
             if instruction[4] == item_name:
-                print(f"Found instruction '{item_name}'. Updating weight and related fields.")
-                instruction[5] = new_weight
+                instruction[5] = new_weight  # Weight
+                instruction[13] = update_last_two_words(instruction[13], numeric_weight, unit)  # Action
+                instruction[18] = numeric_weight  # AudioQ
                 
-                # Preserve the first word of the action
-                action_parts = instruction[13].split()
-                first_word = action_parts[0] if action_parts else instruction[1]  # Use procedure as fallback
-                instruction[13] = f"{first_word} {numeric_weight} {unit}"
-                
-                instruction[18] = numeric_weight
-                instruction[19] = unit
-                print(f"Updated instruction action to: {instruction[13]}")
+        
+        for ingredient in ingredient_data[1:]:
+            if ingredient[0] == item_name:
+                ingredient[1] = new_weight  # Weight
+                ingredient[2] = update_last_two_words(ingredient[2], numeric_weight, unit)  # Action
+                ingredient[6] = numeric_weight  # AudioQ
+                ingredient[7] = unit  # AudioU
 
-                for ingredient in ingredient_data[1:]:
-                    if ingredient[0] == item_name:
-                        ingredient[1] = new_weight
-                        ingredient[2] = f"{ingredient[2].split()[0]} {numeric_weight} {unit}"
-                        ingredient[6] = numeric_weight
-                        ingredient[7] = unit
-                        print(f"Updated Weight and Action for Ingredient '{ingredient[0]}' to {new_weight} and {ingredient[2]}")
-        return
+def update_last_two_words(action, numeric_weight, unit):
+    words = action.split()
+    if len(words) >= 3:
+        words[-2] = numeric_weight
+        words[-1] = unit
+    return ' '.join(words)
+def update_last_word(action, new_word):
+    words = action.split()
+    if words:
+        words[-1] = new_word
+    return ' '.join(words)
+def update_action_audio(row, col, new_value, frame):
+    if frame == ingredients_frame:
+        if col == 2:  # Action
+            words = new_value.split()
+            if len(words) >= 3:
+                ingredient_data[row][3] = words[0]  # audio
+                ingredient_data[row][0] = words[1]  # Name
+                ingredient_data[row][5] = words[0]  # audioP
+                update_name(ingredient_data[row][0], words[1], ingredients_frame)
+        elif col in [3, 5]:  # audio or audioP
+            ingredient_data[row][3] = new_value  # audio
+            ingredient_data[row][5] = new_value  # audioP
+            action_words = ingredient_data[row][2].split()
+            if action_words:
+                action_words[0] = new_value
+                ingredient_data[row][2] = ' '.join(action_words)
+    
+    elif frame == instructions_frame:
+        if col == 13:  # Action
+            words = new_value.split()
+            if words:
+                instruction_data[row][1] = words[0]  # Procedure
+                instruction_data[row][17] = words[0]  # audioP
+                if len(words) > 1:
+                    instruction_data[row][4] = words[-1]  # Text
+                    instruction_data[row][16] = words[-1]  # AudioI
+                    update_name(instruction_data[row][4], words[-1], instructions_frame)
+        elif col in [1, 17]:  # Procedure or audioP
+            instruction_data[row][1] = new_value  # Procedure
+            instruction_data[row][17] = new_value  # audioP
+            action_words = instruction_data[row][13].split()
+            if action_words:
+                action_words[0] = new_value
+                instruction_data[row][13] = ' '.join(action_words)
+
+
 # Function to save the updated data back to the JSON file
 def save_json():
+    global data, ingredient_data, instruction_data
     file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON Files", "*.json")])
     
     if not file_path:
         return
     
     try:
-        # Start with the existing data to preserve metadata
-        updated_data = data.copy() if data else {}
-
-        # Update or add the main recipe metadata
-        updated_data.update({
-            "name": [data.get("name", ["Unknown Recipe"])[0]],
-            "audio1": data.get("audio1", [""]),
-            "audio2": data.get("audio2", [""]),
-            "category": data.get("category", "0"),
-            "description": data.get("description", ""),
-            "difficulty": data.get("difficulty", "Easy"),
-            "id": data.get("id", 0),
-            "imageUrl": data.get("imageUrl", ""),
-            "isSelected": data.get("isSelected", False),
-            "subCategories": data.get("subCategories", ""),
-            "tags": data.get("tags", ""),
+        # Initialize the updated data structure
+        updated_data = {
+            "name": ["Unknown Recipe"],
+            "audio1": [""],
+            "audio2": [""],
+            "category": "0",
+            "description": "",
+            "difficulty": "Easy",
+            "id": 0,
+            "imageUrl": "",
+            "isSelected": False,
+            "subCategories": "",
+            "tags": "",
             "Ingredients": [],
             "Instruction": []
-        })
+        }
 
-        # Save changes made to the Ingredients
-        for i in range(1, len(ingredient_data)):  # Skip the header (row 0)
-            ingredient = {
-                "app_audio": "",
-                "audio": "",
-                "audioI": "",
-                "audioP": "",
-                "audioQ": "",
-                "audioU": "",
-                "id": i,
-                "image": "",
-                "text": "",
-                "title": "",
-                "weight": ""
-            }
-            
-            ingredient["title"] = ingredient_data[i][0]
-            ingredient["weight"] = ingredient_data[i][1]
-            weight_parts = ingredient["weight"].split()
-            ingredient["audioQ"] = weight_parts[0] if weight_parts else ""
-            ingredient["audioU"] = weight_parts[1] if len(weight_parts) > 1 else ""
-            ingredient["app_audio"] = f"Add {ingredient['title']} {ingredient['weight']}"
-            ingredient["audioI"] = ingredient["title"]
-            ingredient["audioP"] = "Add"
-            ingredient["audio"] = ingredient_data[i][3] if len(ingredient_data[i]) > 3 else ""
-            ingredient["audioI"] = ingredient_data[i][4] if len(ingredient_data[i]) > 4 else ingredient["title"]
-            ingredient["audioP"] = ingredient_data[i][5] if len(ingredient_data[i]) > 5 else "Add"
-            
-            updated_data["Ingredients"].append(ingredient)
+        # Update recipe metadata if 'data' exists
+        if isinstance(data, dict):
+            updated_data["name"] = [data.get("name", ["Unknown Recipe"])[0]] if isinstance(data.get("name"), list) else [data.get("name", "Unknown Recipe")]
+            updated_data["audio1"] = data.get("audio1", [""])
+            updated_data["audio2"] = data.get("audio2", [""])
+            updated_data["category"] = str(data.get("category", "0"))
+            updated_data["description"] = str(data.get("description", ""))
+            updated_data["difficulty"] = str(data.get("difficulty", "Easy"))
+            updated_data["id"] = int(data.get("id", 0))
+            updated_data["imageUrl"] = str(data.get("imageUrl", ""))
+            updated_data["isSelected"] = bool(data.get("isSelected", False))
+            updated_data["subCategories"] = str(data.get("subCategories", ""))
+            updated_data["tags"] = str(data.get("tags", ""))
 
-        # Save changes made to the Instructions
-        for i in range(1, len(instruction_data)):  # Skip the header (row 0)
-            instruction = {
-                "Audio": "",
-                "Indtime_lid_con": "",
-                "Induction_on_time": "",
-                "Induction_power": "",
-                "Magnetron_on_time": "",
-                "Magnetron_power": "",
-                "Text": "",
-                "Weight": "",
-                "app_audio": "",
-                "audioI": "",
-                "audioP": "",
-                "audioQ": "",
-                "audioU": "",
-                "durationInSec": 0,
-                "id": i,
-                "image": "",
-                "lid": "",
-                "mag_severity": "",
-                "pump_on": "",
-                "skip": "",
-                "stirrer_on": "",
-                "wait_time": "",
-                "warm_time": "",
-                "threshold": "0",
-                "purge_on": ""
-            }
-            
-            # Map instruction_data to instruction dict
-            field_mapping = {
-                1: "Audio", 2: "Induction_on_time", 3: "Induction_power", 4: "Text", 5: "Weight",
-                6: "durationInSec", 7: "lid", 8: "wait_time", 9: "warm_time", 10: "stirrer_on",
-                11: "Magnetron_on_time", 12: "Magnetron_power", 13: "app_audio", 14: "mag_severity",
-                15: "pump_on", 16: "audioI", 17: "audioP", 18: "audioQ", 19: "audioU", 20: "skip"
-            }
-            
-            for idx, field in field_mapping.items():
-                if idx < len(instruction_data[i]):
-                    instruction[field] = instruction_data[i][idx]
-            
-            # Convert durationInSec to int
-            instruction["durationInSec"] = int(instruction["durationInSec"]) if instruction["durationInSec"] else 0
-            
-            updated_data["Instruction"].append(instruction)
+        # Process Ingredients
+        if isinstance(ingredient_data, list) and len(ingredient_data) > 1:
+            for i in range(1, len(ingredient_data)):  # Skip header row
+                ingredient = {
+                    "app_audio": "",
+                    "audio": "",
+                    "audioI": "",
+                    "audioP": "",
+                    "audioQ": "",
+                    "audioU": "",
+                    "id": i,
+                    "image": "",
+                    "text": "",
+                    "title": "",
+                    "weight": ""
+                }
+                
+                row = ingredient_data[i]
+                if isinstance(row, list):
+                    ingredient["title"] = str(row[0]) if len(row) > 0 else ""
+                    ingredient["weight"] = str(row[1]) if len(row) > 1 else ""
+                    ingredient["app_audio"] = str(row[2]) if len(row) > 2 else ""
+                    ingredient["audio"] = str(row[3]) if len(row) > 3 else ""
+                    ingredient["audioI"] = str(row[4]) if len(row) > 4 else ""
+                    ingredient["audioP"] = str(row[5]) if len(row) > 5 else ""
+                    
+                    # Safely split weight
+                    weight_parts = ingredient["weight"].split()
+                    ingredient["audioQ"] = weight_parts[0] if len(weight_parts) > 0 else ""
+                    ingredient["audioU"] = weight_parts[1] if len(weight_parts) > 1 else ""
+                    
+                    ingredient["image"] = str(row[8]) if len(row) > 8 else ""
+                    ingredient["text"] = str(row[9]) if len(row) > 9 else ""
+                
+                updated_data["Ingredients"].append(ingredient)
 
-        # Write the updated data back to the JSON file
+        # Process Instructions
+        if isinstance(instruction_data, list) and len(instruction_data) > 1:
+            for i in range(1, len(instruction_data)):  # Skip header row
+                instruction = {
+                    "Audio": "",
+                    "Indtime_lid_con": "",
+                    "Induction_on_time": "0",
+                    "Induction_power": "0",
+                    "Magnetron_on_time": "0",
+                    "Magnetron_power": "0",
+                    "Text": "",
+                    "Weight": "",
+                    "app_audio": "",
+                    "audioI": "",
+                    "audioP": "",
+                    "audioQ": "",
+                    "audioU": "",
+                    "durationInSec": 0,
+                    "id": i,
+                    "image": "",
+                    "lid": "",
+                    "mag_severity": "",
+                    "pump_on": "0",
+                    "skip": "false",
+                    "stirrer_on": "0",
+                    "wait_time": "0",
+                    "warm_time": "0",
+                    "threshold": "0",
+                    "purge_on": "0"
+                }
+                
+                row = instruction_data[i]
+                if isinstance(row, list):
+                    field_mapping = {
+                        1: "Audio", 2: "Induction_on_time", 3: "Induction_power", 4: "Text", 5: "Weight",
+                        6: "durationInSec", 7: "lid", 8: "wait_time", 9: "warm_time", 10: "stirrer_on",
+                        11: "Magnetron_on_time", 12: "Magnetron_power", 13: "app_audio", 14: "mag_severity",
+                        15: "pump_on", 16: "audioI", 17: "audioP", 18: "audioQ", 19: "audioU", 20: "skip",
+                        21: "Indtime_lid_con"
+                    }
+                    
+                    for idx, field in field_mapping.items():
+                        if idx < len(row):
+                            if field == "durationInSec":
+                                instruction[field] = int(row[idx]) if str(row[idx]).isdigit() else 0
+                            else:
+                                instruction[field] = str(row[idx])
+                
+                updated_data["Instruction"].append(instruction)
+
+        # Write the updated data to the JSON file
         with open(file_path, 'w') as file:
             json.dump(updated_data, file, indent=2)
 
@@ -775,6 +761,9 @@ def save_json():
 
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred while saving: {str(e)}")
+        # Print the full error traceback for debugging
+        import traceback
+        traceback.print_exc()
 
 def prt_action(part_name):
     print(f"{part_name} button clicked")
