@@ -1151,4 +1151,3 @@ prt4_button.pack(side='left', padx=5)
 
 # Start the tkinter event loop
 root.mainloop()
-
