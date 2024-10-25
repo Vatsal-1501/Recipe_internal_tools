@@ -1,6 +1,6 @@
 
 import tkinter as tk
-from tkinter import filedialog, messagebox ,ttk,Menu
+from tkinter import filedialog, messagebox ,ttk
 import pygame 
 import os
 import threading
@@ -9,7 +9,8 @@ import io
 import zipfile
 import json
 from tkinter import ttk
-import shutil 
+import random
+
 
 # Global variables
 ingredient_data = None  # Data for the ingredients table
@@ -20,12 +21,10 @@ highlight_color = "yellow"  # Color for highlighting the selected row
 default_color = "white"  # Default background color
 long_press_duration = 500  # Duration in milliseconds to detect long press
 long_press_active = False  # To track if long press is active
-copied_row = None
 
 pygame.mixer.init()
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AUDIO_FOLDER_PATH = os.path.join(BASE_DIR, "mp3")
-SELECT_FOLDER_PATHS = os.path.join(BASE_DIR, "Recipee's", "Aloo Samosa")
+AUDIO_FOLDER_PATH = r"D:\Recipe_internal_tools\mp3"
+SELECT_FOLDER_PATHS = r"D:\Recipe_internal_tools\Recipee's\Aloo Samosa"
 global error_cells
 error_cells = [] 
 
@@ -56,8 +55,12 @@ def play_audio(file_name, row, col, frame):
         
         # Start audio playback in a separate thread
         threading.Thread(target=play_and_reset, daemon=True).start()
-    
-        
+    else:
+        print(f"Audio file {audio_file} not found!")
+        # Change cell color to red
+        change_cell_color(row, col, frame, "red") 
+        # Reset cell color after 2 seconds
+        root.after(1500, lambda: change_cell_color(row, col, frame, None))
 
 # Function to handle left-click on the audioP column (column index 5)
 def on_audio_click(row, col):
@@ -73,34 +76,7 @@ def on_instruction_audio_click(row, col):
         play_audio(audio_file_name, row, col, instructions_frame)
 
 def audio_file_exists(file_name):
-    audio_path = os.path.join(AUDIO_FOLDER_PATH, f"{file_name}.mp3")
-    if os.path.exists(audio_path):
-        return True
-    else:
-        return False
-
-def handle_missing_audio(file_name):
-    audio_path = os.path.join(AUDIO_FOLDER_PATH, f"{file_name}.mp3")
-    if not os.path.exists(audio_path):
-        response = messagebox.askquestion("Audio File Not Found", 
-                                          f"The audio file '{file_name}.mp3' was not found. Would you like to add it?")
-        if response == 'yes':
-            file_path = filedialog.askopenfilename(
-                title="Select Audio File",
-                filetypes=[("MP3 files", "*.mp3")]
-            )
-            if file_path:
-                try:
-                    # Ensure the AUDIO_FOLDER_PATH exists
-                    os.makedirs(AUDIO_FOLDER_PATH, exist_ok=True)
-                    # Copy the selected file to the AUDIO_FOLDER_PATH
-                    shutil.copy2(file_path, audio_path)
-                    messagebox.showinfo("Success", f"Audio file '{file_name}.mp3' has been added successfully.")
-                    return True
-                except Exception as e:
-                    messagebox.showerror("Error", f"An error occurred while copying the file: {str(e)}")
-    return False
-    
+    return os.path.exists(os.path.join(AUDIO_FOLDER_PATH, f"{file_name}.mp3"))
 
 def check_for_errors(data_table, frame):
     error_cells = []
@@ -297,7 +273,7 @@ def display_instructions_table(data):
 
             if j in [16, 17, 18, 19]:  # AudioI, AudioP, AudioQ, AudioU columns
               label.bind("<Button-1>", lambda event, r=i, c=j: on_instruction_audio_click(r, c))
-              
+            
             if i > 0:  # Skip the header
                 label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, instruction_data, instructions_frame))
                 
@@ -318,8 +294,7 @@ def display_instructions_table(data):
         instructions_frame.grid_columnconfigure(j, weight=1)
 
 def display_ingredients_table(data):
-    
-    
+    global selected_row
     for i, row in enumerate(data):
         for j, value in enumerate(row):
             cell = tk.Frame(ingredients_frame, relief="solid", borderwidth=1)
@@ -339,13 +314,11 @@ def display_ingredients_table(data):
             
             if j in [4, 5, 6, 7]:  # audio, audioI, audioP, audioQ, audioU columns
               label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
-            else:
-              label.bind("<Button-1>", lambda event, r=i, c=j: handle_missing_audio(r, c)) 
 
             if i > 0:  # Skip the header
                 label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, ingredient_data, ingredients_frame))
                 
-                
+                # Detect long press (right-click hold) for selecting row
             if j == 4:  # Index of the audioP column
                     label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
             elif j == 5:  # Index of the audioP column
@@ -375,15 +348,15 @@ def end_long_press(row, frame):
 def select_row_long_press(row, frame):
     global selected_row, long_press_active
     if long_press_active:  # Ensure the long press is still active when timer expires
-      if frame == instructions_frame:
         if selected_row == row:
             selected_row = None  # Deselect the row if it was already selected
         else:
             selected_row = row  # Select the new row
         clear_table(frame)  # Clear the table and re-draw to update the highlight
-        if frame == instructions_frame:
+        if frame == ingredients_frame:
+            display_ingredients_table(ingredient_data)
+        else:
             display_instructions_table(instruction_data)
-        
 
 # Function to clear the table before refreshing
 def clear_table(frame):
@@ -443,23 +416,7 @@ def move_row_down(data_table, frame):
 
 def edit_cell(row, col, data_table, frame):
     current_value = data_table[row][col]
-    if frame == ingredients_frame:
-        audio_columns = [4, 5, 6, 7]  # Audio columns for ingredients
-    elif frame == instructions_frame:
-        audio_columns = [16, 17, 18, 19]  # Audio columns for instructions
-    else:
-        audio_columns = []  # No audio columns if it's neither
 
-    if col in audio_columns:
-        if not audio_file_exists(current_value):
-            if handle_missing_audio(current_value):
-                # If the file was successfully added, update the cell color
-                cell = frame.grid_slaves(row=row, column=col)[0]
-                cell.config(bg='white')  # or any other color to indicate success
-            else:
-                # If the file is still missing, keep the cell red
-                cell = frame.grid_slaves(row=row, column=col)[0]
-                cell.config(bg='red')
     # Create an entry widget for inline editing
     entry = tk.Entry(frame, font=('Arial', 10))
     entry.insert(0, current_value)
@@ -681,7 +638,40 @@ def update_action_audio(row, col, new_value, frame):
             if action_words:
                 action_words[0] = new_value
                 instruction_data[row][13] = ' '.join(action_words)
+def display_ingredient_weight(ingredient, pump_value):
+    """
+    Display the weight for the ingredient. If the ingredient is 'water',
+    override the weight based on the pump value.
+    
+    Parameters:
+    ingredient (dict): The ingredient data.
+    pump_value (int): The value of the pump (affects only 'water' weight).
+    
+    Returns:
+    str: The weight to display.
+    """
+    # Check if the ingredient is 'water'
+    if ingredient["title"].lower() == "water":
+        # Calculate the weight based on pump value (5 -> 50 ml, 10 -> 100 ml)
+        return f"{pump_value * 10} ml"
+    
+    # For other ingredients, return the weight from the JSON
+    return ingredient.get("weight", "")
 
+def update_instruction_table(ingredient_data, pump_value):
+    """
+    Updates the instruction table by displaying the correct weight for 'water'
+    based on the pump value.
+    
+    Parameters:
+    ingredient_data (list): The list of ingredients loaded from JSON.
+    pump_value (int): The value of the pump (affects only 'water' weight).
+    """
+    
+    # Iterate over the ingredients and update the displayed weight
+    for ingredient in ingredient_data:
+        display_weight = display_ingredient_weight(ingredient, pump_value)
+        print(f"Ingredient: {ingredient['title']}, Weight: {display_weight}")
 
 # Function to save the updated data back to the JSON file
 def save_json():
@@ -1056,20 +1046,60 @@ def load_file(event=None):
 
 def hide_combobox():
     recipe_combobox.pack_forget()  # Hide the combo box
-def refresh_tables():
-    global error_cells
-    error_cells = []  # Clear any existing error cells
-    
-    # Clear and redraw both tables
-    clear_table(ingredients_frame)
-    clear_table(instructions_frame)
-    display_ingredients_table(ingredient_data)
-    display_instructions_table(instruction_data)
-    
-    # Recheck for errors
-    error_cells = check_for_errors(instruction_data, instructions_frame)
-    
-    messagebox.showinfo("Refresh", "Tables have been refreshed and errors rechecked.")
+def generate_recipe(recipe_data):
+    recipe = {
+        "ingredients": [],
+        "instructions": []
+    }
+
+    ingredients = recipe_data["ingredients"]
+    instructions = recipe_data["instructions"]
+
+    # Find the total water amount from ingredients
+    water_ingredient = next((ing for ing in ingredients if ing["name"] == "Water"), None)
+    total_water = water_ingredient["weight"] if water_ingredient else 0
+    remaining_water = total_water
+
+    for ingredient in ingredients:
+        name = ingredient["name"]
+        unit = ingredient["unit"]
+        weight = ingredient["weight"]
+
+        if name == "Water":
+            amount = total_water
+        else:
+            amount = weight
+
+        recipe["ingredients"].append(f"{amount} {unit} {name}")
+
+    for instruction in instructions:
+        text = instruction["instruction"]
+        pump = instruction.get("pump")
+
+        if "Water" in text and pump is not None:
+            water_amount = min(pump * 10, remaining_water)
+            remaining_water -= water_amount
+            text = text.replace("Water", f"{water_amount} ml Water")
+        
+        recipe["instructions"].append(text)
+
+    return recipe
+
+# Load JSON data
+with open('recipe_data.json', 'r') as file:
+    recipe_data = json.load(file)
+
+# Generate recipe
+recipe = generate_recipe(recipe_data)
+
+# Print recipe
+print("Ingredients:")
+for ingredient in recipe["ingredients"]:
+    print(ingredient)
+
+print("\nInstructions:")
+for i, instruction in enumerate(recipe["instructions"], 1):
+    print(f"{i}. {instruction}")
 root = tk.Tk()
 root.title("Recipe Editor")
 
@@ -1102,19 +1132,17 @@ def on_frame_configure(event):
 
 content_frame.bind("<Configure>", on_frame_configure)
 
-top_frame = tk.Frame(root)
-top_frame.pack(side=tk.TOP, fill=tk.X)
 # Create a frame for the buttons at the top left
-button_frame = tk.Frame(top_frame)
-button_frame.pack(pady=10)
+button_frame = tk.Frame(content_frame)
+button_frame.pack(side=tk.TOP, anchor='nw', padx=10, pady=10)
 
 # New Recipe button
 new_recipe_button = tk.Button(button_frame, text="New Recipe", command=new_recipe)
-new_recipe_button.pack(side='left', padx=5)
+new_recipe_button.pack(side=tk.LEFT, padx=5)
 
 # Select Recipe button
 select_button = tk.Button(button_frame, text="Select the Recipe", command=select_recipe)
-select_button.pack(side='left', padx=5)
+select_button.pack(side=tk.LEFT, padx=5)
 
 # Create a combo box for displaying text files (initially hidden)
 recipe_combobox = ttk.Combobox(root)
@@ -1208,7 +1236,5 @@ prt3_button.pack(side='left', padx=5)
 prt4_button = tk.Button(button_frame, text="prt4", command=lambda: prt_action("prt 4"))
 prt4_button.pack(side='left', padx=5)
 
-refresh_button = tk.Button(button_frame, text="Refresh", command=refresh_tables)
-refresh_button.pack(side=tk.LEFT, padx=5)
 # Start the tkinter event loop
 root.mainloop()
