@@ -1029,6 +1029,40 @@ def refresh_tables():
     error_cells = []
     selected_row = None
     selected_table = None
+    # Enforce safety measures in instructions table
+    for row in instruction_data[1:]:
+        lid_needs_close = False
+        # Magnetron On Time (index 6)
+        mag_on_time = str(row[6]).strip()
+        if mag_on_time and mag_on_time.isdigit() and int(mag_on_time) > 0:
+            lid_needs_close = True
+            row[7] = "100"  # Mag Power
+        # Pump (index 10)
+        pump_value = str(row[10]).strip()
+        if pump_value and pump_value.isdigit() and int(pump_value) > 0:
+            lid_needs_close = True
+        # Stirrer (index 9)
+        stirrer_value = str(row[9]).strip()
+        if stirrer_value in ["1", "2", "3", "4"]:
+            lid_needs_close = True
+        # Update Lid Status (index 11)
+        if lid_needs_close:
+            row[11] = "close"
+        # Update Action (index 12)
+        procedure = str(row[1]).strip()
+        text = str(row[2]).strip()
+        weight = str(row[3]).strip()
+        row[12] = f"{procedure} {text} {weight}".strip()
+        row[13] = text  # Update AudioI
+        row[14] = procedure  # Update AudioP
+    # Update Action in ingredients table
+    for row in ingredient_data[1:]:
+        audio = str(row[3]).strip()
+        name = str(row[0]).strip()
+        weight = str(row[1]).strip()
+        row[2] = f"{audio} {name} {weight}".strip()
+        row[3] = audio  # Update audio
+        row[5] = audio  # Update audioP
     clear_table(ingredients_frame)
     clear_table(instructions_frame)
     display_ingredients_table(ingredient_data)
