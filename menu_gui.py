@@ -13,11 +13,10 @@ import shutil
 ingredient_data = None  # Data for the ingredients table
 instruction_data = None  # Data for the instructions table
 data = None
-selected_row = None  # Store the currently selected row
+selected_row = None  # Store the currently selected row index
+selected_table = None  # Store the table with the selected row ("ingredients" or "instructions")
 highlight_color = "yellow"  # Color for highlighting the selected row
 default_color = "white"  # Default background color
-long_press_duration = 500  # Duration in milliseconds to detect long press
-long_press_active = False  # To track if long press is active
 copied_row = None
 error_cells = []
 water_used_label = None  # Label for displaying water used
@@ -142,7 +141,7 @@ def update_total_time():
     
 
 def load_json():
-    global ingredient_data, instruction_data, data
+    global ingredient_data, instruction_data, data, selected_row, selected_table
     file_path = filedialog.askopenfilename(filetypes=[("JSON Files", "*.json"), ("Text Files", "*.txt"), ("Zip Files", "*.zip")])
     if not file_path:
         return
@@ -162,6 +161,8 @@ def load_json():
         title_label.config(text=f"Recipe: {recipe_name}")
         ingredient_data = format_ingredients(data)
         instruction_data = format_instructions(data)
+        selected_row = None
+        selected_table = None
         clear_table(ingredients_frame)
         clear_table(instructions_frame)
         display_ingredients_table(ingredient_data)
@@ -197,31 +198,31 @@ def format_instructions(data):
                     'Mag On Time', 'Mag Power', 'Duration (s)', 'Stirrer', 'Pump', 'Lid Status',
                     'Action', 'AudioI', 'AudioP', 'AudioQ', 'AudioU', 'Skip', 'Mag Serv',
                     'Ind_lid_con', 'Threshold', 'Purge', 'Wait Time (s)', 'Warm Time (s)']
-    for i, instruction in enumerate(instructions):
+    for i, instructions in enumerate(instructions):
         step = f"Step {i + 1}"
-        procedure = instruction.get("Audio", "")
-        text = instruction.get("Text", "")
-        weight = instruction.get("Weight", "")
-        ind_on_time = instruction.get("Induction_on_time", 0)
-        ind_power = instruction.get("Induction_power", 0)
-        mag_on_time = instruction.get("Magnetron_on_time", 0)
-        mag_power = instruction.get("Magnetron_power", 0)
-        duration = instruction.get("durationInSec", 0)
-        stirrer = instruction.get("stirrer_on", 0)
-        pump = instruction.get("pump_on", 0)
-        lid_status = instruction.get("lid", "N/A")
-        action = instruction.get("app_audio", 0)
-        audio_i = instruction.get("audioI", 0)
-        audio_p = instruction.get("audioP", 0)
-        audio_q = instruction.get("audioQ", 0)
-        audio_u = instruction.get("audioU", 0)
-        skip = instruction.get("skip", 0)
-        mag_serv = instruction.get("mag_severity", "")
-        ind_lid_con = instruction.get("Indtime_lid_con", "")
-        threshold = instruction.get("threshold", "")
-        purge = instruction.get("purge_on", "")
-        wait_time = instruction.get("wait_time", 0)
-        warm_time = instruction.get("warm_time", 0)
+        procedure = instructions.get("Audio", "")
+        text = instructions.get("Text", "")
+        weight = instructions.get("Weight", "")
+        ind_on_time = instructions.get("Induction_on_time", 0)
+        ind_power = instructions.get("Induction_power", 0)
+        mag_on_time = instructions.get("Magnetron_on_time", 0)
+        mag_power = instructions.get("Magnetron_power", 0)
+        duration = instructions.get("durationInSec", 0)
+        stirrer = instructions.get("stirrer_on", 0)
+        pump = instructions.get("pump_on", 0)
+        lid_status = instructions.get("lid", "N/A")
+        action = instructions.get("app_audio", 0)
+        audio_i = instructions.get("audioI", 0)
+        audio_p = instructions.get("audioP", 0)
+        audio_q = instructions.get("audioQ", 0)
+        audio_u = instructions.get("audioU", 0)
+        skip = instructions.get("skip", 0)
+        mag_serv = instructions.get("mag_severity", "")
+        ind_lid_con = instructions.get("Indtime_lid_con", "")
+        threshold = instructions.get("threshold", "")
+        purge = instructions.get("purge_on", "")
+        wait_time = instructions.get("wait_time", 0)
+        warm_time = instructions.get("warm_time", 0)
         rows.append([step, procedure, text, weight, ind_on_time, ind_power, mag_on_time, mag_power,
                      duration, stirrer, pump, lid_status, action, audio_i, audio_p, audio_q, audio_u,
                      skip, mag_serv, ind_lid_con, threshold, purge, wait_time, warm_time])
@@ -232,26 +233,37 @@ def clear_table(frame):
         widget.destroy()
 
 def add_ingredient():
+    global ingredient_data, selected_row, selected_table
     ingredient_data.append(["New Ingredient", "0", "", "", "", "", "0", "", "", ""])
+    selected_row = None
+    selected_table = None
     clear_table(ingredients_frame)
+    clear_table(instructions_frame)
     display_ingredients_table(ingredient_data)
+    display_instructions_table(instruction_data)
 
 def add_instruction():
+    global instruction_data, selected_row, selected_table
     next_step_number = len(instruction_data)
     instruction_data.append([f"Step {next_step_number}", "", "", "0", 0, 0, 0, 0, 0, 0, 0, "N/A", "", "", "", "", "", "", "", "", "", "", 0, 0])
+    selected_row = None
+    selected_table = None
+    clear_table(ingredients_frame)
     clear_table(instructions_frame)
+    display_ingredients_table(ingredient_data)
     display_instructions_table(instruction_data)
     update_water_used()
     update_total_time()
 
 def display_ingredients_table(data):
+    global selected_row, selected_table
     for i, row in enumerate(data):
         for j, value in enumerate(row):
             cell = tk.Frame(ingredients_frame, relief="solid", borderwidth=1)
             cell.grid(row=i, column=j, sticky="nsew", padx=1, pady=1)
             if i == 0:
                 bg_color = "light blue"
-            elif i == selected_row:
+            elif i == selected_row and selected_table == "ingredients":
                 bg_color = highlight_color
             else:
                 bg_color = default_color
@@ -265,13 +277,15 @@ def display_ingredients_table(data):
                 label.bind("<Button-1>", lambda event, r=i, c=j: on_audio_click(r, c))
             else:
                 label.bind("<Button-1>", lambda event, r=i, c=j: handle_missing_audio(r, c))
-            if i > 0 and j != 2:
-                label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, ingredient_data, ingredients_frame))
+            if i > 0:
+                if j != 2:  # Skip Action column (index 2)
+                    label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, ingredient_data, ingredients_frame))
+                label.bind("<Button-3>", lambda event, r=i: toggle_row_selection(r, ingredients_frame))
     for j in range(len(data[0])):
         ingredients_frame.grid_columnconfigure(j, weight=1)
 
 def display_instructions_table(data):
-    global selected_row, error_cells
+    global selected_row, selected_table, error_cells
     error_cells = check_for_errors(data, instructions_frame)
     for i, row in enumerate(data):
         for j, value in enumerate(row):
@@ -281,7 +295,7 @@ def display_instructions_table(data):
                 bg_color = "light blue"
             elif (i, j) in error_cells:
                 bg_color = "red"
-            elif i == selected_row:
+            elif i == selected_row and selected_table == "instructions":
                 bg_color = highlight_color
             else:
                 bg_color = default_color
@@ -293,67 +307,93 @@ def display_instructions_table(data):
             label.pack(side='left', fill='both', expand=True)
             if j in [13, 14, 15, 16]:
                 label.bind("<Button-1>", lambda event, r=i, c=j: on_instruction_audio_click(r, c))
-            if i > 0 and j != 12:  # Skip Action column (index 12)
-                label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, instruction_data, instructions_frame))
-                label.bind("<ButtonPress-3>", lambda event, r=i: start_long_press(r, instructions_frame))
-                label.bind("<ButtonRelease-3>", lambda event, r=i: end_long_press(r, instructions_frame))
+            if i > 0:
+                if j != 12:  # Skip Action column (index 12)
+                    label.bind("<Double-1>", lambda event, r=i, c=j: edit_cell(r, c, instruction_data, instructions_frame))
+                label.bind("<Button-3>", lambda event, r=i: toggle_row_selection(r, instructions_frame))
     for j in range(len(data[0])):
         instructions_frame.grid_columnconfigure(j, weight=1)
     update_water_used()
     update_total_time()
 
-def start_long_press(row, frame):
-    global long_press_active
-    long_press_active = True
-    root.after(long_press_duration, lambda: select_row_long_press(row, frame))
+def toggle_row_selection(row, frame):
+    global selected_row, selected_table
+    if frame == ingredients_frame:
+        table_name = "ingredients"
+        other_frame = instructions_frame
+    elif frame == instructions_frame:
+        table_name = "instructions"
+        other_frame = ingredients_frame
+    else:
+        return
+    if selected_row == row and selected_table == table_name:
+        selected_row = None
+        selected_table = None
+    else:
+        selected_row = row
+        selected_table = table_name
+    clear_table(ingredients_frame)
+    clear_table(instructions_frame)
+    display_ingredients_table(ingredient_data)
+    display_instructions_table(instruction_data)
 
-def end_long_press(row, frame):
-    global long_press_active
-    long_press_active = False
-
-def select_row_long_press(row, frame):
-    global selected_row, long_press_active
-    if long_press_active:
-        if frame == instructions_frame:
-            if selected_row == row:
-                selected_row = None
-            else:
-                selected_row = row
-            clear_table(frame)
-            if frame == instructions_frame:
-                display_instructions_table(instruction_data)
 
 def update_step_numbers(data_table):
     for i in range(1, len(data_table)):
         data_table[i][0] = f"Step {i}"
 
 def move_row_up(data_table, frame):
-    global selected_row
+    global selected_row, selected_table
     if selected_row is None or selected_row == 1:
+        return
+    if (frame == ingredients_frame and selected_table != "ingredients") or \
+       (frame == instructions_frame and selected_table != "instructions"):
         return
     data_table[selected_row], data_table[selected_row - 1] = data_table[selected_row - 1], data_table[selected_row]
     selected_row -= 1
-    update_step_numbers(data_table)
+    if frame == instructions_frame:
+        update_step_numbers(data_table)
     clear_table(frame)
     if frame == ingredients_frame:
         display_ingredients_table(data_table)
     else:
         display_instructions_table(data_table)
+    # Refresh the other table to update selection highlight
+    other_frame = instructions_frame if frame == ingredients_frame else ingredients_frame
+    clear_table(other_frame)
+    if other_frame == ingredients_frame:
+        display_ingredients_table(ingredient_data)
+    else:
+        display_instructions_table(instruction_data)
 
 def move_row_down(data_table, frame):
-    global selected_row
+    global selected_row, selected_table
     if selected_row is None or selected_row == len(data_table) - 1:
+        return
+    if (frame == ingredients_frame and selected_table != "ingredients") or \
+       (frame == instructions_frame and selected_table != "instructions"):
         return
     data_table[selected_row], data_table[selected_row + 1] = data_table[selected_row + 1], data_table[selected_row]
     selected_row += 1
-    update_step_numbers(data_table)
+    if frame == instructions_frame:
+        update_step_numbers(data_table)
     clear_table(frame)
     if frame == ingredients_frame:
         display_ingredients_table(data_table)
     else:
         display_instructions_table(data_table)
+    # Refresh the other table to update selection highlight
+    other_frame = instructions_frame if frame == ingredients_frame else ingredients_frame
+    clear_table(other_frame)
+    if other_frame == ingredients_frame:
+        display_ingredients_table(ingredient_data)
+    else:
+        display_instructions_table(instruction_data)
 
 def edit_cell(row, col, data_table, frame):
+    if (frame == ingredients_frame and col == 2) or (frame == instructions_frame and col == 12):
+        messagebox.showinfo("Non-Editable", "The Action column is non-editable and updates automatically.")
+        return
     current_value = data_table[row][col]
     if frame == ingredients_frame:
         audio_columns = [4, 5, 6, 7]
@@ -405,6 +445,8 @@ def edit_cell(row, col, data_table, frame):
                     if col == 6 and new_value.strip() and new_value != "0":
                         data_table[row][11] = "close"  # Lid Status
                         data_table[row][7] = "100"  # Mag Power
+                        data_table[row][18] = "high" #Mag Serv
+                    
                 elif col == 8:  # Duration
                     duration_seconds = int(new_value)
                     if duration_seconds < 0 or duration_seconds > 6000:
@@ -417,41 +459,52 @@ def edit_cell(row, col, data_table, frame):
                         if seconds == 0:
                             audioU_text = f"{minutes}Minute"
                         else:
-                            audioU_text = f"{minutes}Minute {seconds}Seconds"
+                            audioU_text = f"{minutes}Minute{seconds}Seconds"
                     else:
                         audioU_text = f"{duration_seconds}Seconds"
                     data_table[row][16] = audioU_text
             except ValueError:
                 messagebox.showerror("Error", f"{'Induction On Time' if col == 4 else 'Magnetron On Time' if col == 6 else 'Duration'} must be a valid number.")
                 return
+        if frame == instructions_frame and col == 9:  # Stirrer
+            if not validate_Stirrer(new_value):
+                messagebox.showerror("Error", "Stirrer value must be between 0 and 4 or blank.")
+                return
+            data_table[row][col] = new_value
+            if new_value in ["1", "2", "3", "4"]:  # Safety rule: Stirrer > 0
+                data_table[row][11] = "close"  # Lid Status
         if frame == instructions_frame and col == 10:  # Pump
             try:
                 pump_value = str(new_value).strip()
                 if pump_value and not pump_value.isdigit():
                     messagebox.showerror("Error", "Pump value must be a non-negative integer or blank.")
                     return
+                data_table[row][col] = new_value
+                if pump_value and int(pump_value) > 0:  # Safety rule: Pump > 0
+                    data_table[row][11] = "close"  # Lid Status
             except ValueError:
                 messagebox.showerror("Error", "Pump value must be a non-negative integer or blank.")
+                return
+        if frame == instructions_frame and col not in [4, 6, 8, 9, 10]:  # Validate other instruction inputs
+            if not validate_instruction_input(col, new_value):
+                entry.delete(0, tk.END)
+                entry.insert(0, old_value)
                 return
         if frame == ingredients_frame:
             if col == 0:
                 update_name(old_value, new_value, ingredients_frame)
             elif col == 1:
                 update_weight(data_table[row][0], new_value, ingredients_frame)
-            elif col in [2, 3, 5]:
+            elif col in [3, 5]:  # audio, audioP
                 update_action_audio(row, col, new_value, ingredients_frame)
         elif frame == instructions_frame:
             if col == 2:  # Text
                 update_name(old_value, new_value, instructions_frame)
             elif col == 3:  # Weight
                 update_weight(data_table[row][2], new_value, instructions_frame)
-            elif col in [1, 12, 14]:  # Procedure, Action, AudioP
+            elif col in [1, 14]:  # Procedure, AudioP
                 update_action_audio(row, col, new_value, instructions_frame)
-            if not validate_instruction_input(col, new_value):
-                entry.delete(0, tk.END)
-                entry.insert(0, old_value)
-                return
-        if col not in [4, 6, 8]:  # Update only if not already handled
+        if col not in [4, 6, 8, 9, 10]:  # Update only if not already handled
             data_table[row][col] = new_value
         # Update Action column for Procedure, Text, or Weight edits
         if frame == instructions_frame and col in [1, 2, 3]:
@@ -474,9 +527,6 @@ def validate_instruction_input(col, value):
     value_str = str(value).strip()
     if col == 17 and not validate_skip(value_str):  # Skip
         messagebox.showerror("Invalid Value", "The 'Skip' column can only accept 'true', 'false', or be blank.")
-        return False
-    if col == 9 and not validate_Stirrer(value_str):  # Stirrer
-        messagebox.showerror("Invalid Value", "The 'Stirrer' column can only accept values from '0 to 4' or be blank.")
         return False
     if col == 11 and not validate_Lid(value_str):  # Lid status
         messagebox.showerror("Invalid Value", "The 'Lid_status' column can only accept 'open', 'close' or be blank.")
@@ -779,8 +829,9 @@ def prt_action(part_name):
     print(f"{part_name} button clicked")
 
 def new_recipe():
-    global ingredient_data, instruction_data, data, selected_row, error_cells
+    global ingredient_data, instruction_data, data, selected_row, selected_table, error_cells
     selected_row = None
+    selected_table = None
     error_cells = []
     data = {
         "name": ["New Recipe"],
@@ -913,14 +964,20 @@ def new_recipe():
         for j in range(len(ingredient_data[i])):
             cell = ingredients_frame.grid_slaves(row=i, column=j)
             if cell:
-                cell[0].bind('<Double-Button-1>',
-                             lambda e, row=i, col=j: edit_cell(row, col, ingredient_data, ingredients_frame))
+                if j != 2:  # Skip Action column
+                    cell[0].bind('<Double-Button-1>',
+                                 lambda e, row=i, col=j: edit_cell(row, col, ingredient_data, ingredients_frame))
+                cell[0].bind('<Button-3>',
+                             lambda e, row=i: toggle_row_selection(row, ingredients_frame))
     for i in range(1, len(instruction_data)):
         for j in range(len(instruction_data[i])):
             cell = instructions_frame.grid_slaves(row=i, column=j)
             if cell:
-                cell[0].bind('<Double-Button-1>',
-                             lambda e, row=i, col=j: edit_cell(row, col, instruction_data, instructions_frame))
+                if j != 12:  # Skip Action column
+                    cell[0].bind('<Double-Button-1>',
+                                 lambda e, row=i, col=j: edit_cell(row, col, instruction_data, instructions_frame))
+                cell[0].bind('<Button-3>',
+                             lambda e, row=i: toggle_row_selection(row, instructions_frame))
     save_button.config(state='normal')
     add_ingredient_button.config(state='normal')
     add_step_button.config(state='normal')
@@ -941,7 +998,7 @@ def select_recipe(event=None):
         print("No text files available.")
 
 def load_file(event=None):
-    global ingredient_data, instruction_data
+    global ingredient_data, instruction_data, selected_row, selected_table
     selected_file = recipe_combobox.get()
     if selected_file:
         file_path = os.path.join(SELECT_FOLDER_PATHS, selected_file)
@@ -952,6 +1009,8 @@ def load_file(event=None):
                 title_label.config(text=f"Recipe: {recipe_name}")
                 ingredient_data = format_ingredients(data)
                 instruction_data = format_instructions(data)
+                selected_row = None
+                selected_table = None
                 clear_table(ingredients_frame)
                 clear_table(instructions_frame)
                 display_ingredients_table(ingredient_data)
@@ -966,8 +1025,10 @@ def hide_combobox():
     recipe_combobox.pack_forget()
 
 def refresh_tables():
-    global error_cells
+    global error_cells, selected_row, selected_table
     error_cells = []
+    selected_row = None
+    selected_table = None
     clear_table(ingredients_frame)
     clear_table(instructions_frame)
     display_ingredients_table(ingredient_data)
@@ -1041,9 +1102,13 @@ add_ingredient_button = tk.Button(button_frame, text="Add Ingredient", command=a
 add_ingredient_button.pack(side='left', padx=5)
 add_step_button = tk.Button(button_frame, text="Add Step", command=add_instruction)
 add_step_button.pack(side='left', padx=5)
-move_up_button = tk.Button(button_frame, text="Move Up", command=lambda: move_row_up(instruction_data, instructions_frame))
+move_up_button = tk.Button(button_frame, text="Move Up",
+                          command=lambda: move_row_up(ingredient_data if selected_table == "ingredients" else instruction_data,
+                                                    ingredients_frame if selected_table == "ingredients" else instructions_frame))
 move_up_button.pack(side='left', padx=5)
-move_down_button = tk.Button(button_frame, text="Move Down", command=lambda: move_row_down(instruction_data, instructions_frame))
+move_down_button = tk.Button(button_frame, text="Move Down",
+                            command=lambda: move_row_down(ingredient_data if selected_table == "ingredients" else instruction_data,
+                                                        ingredients_frame if selected_table == "ingredients" else instructions_frame))
 move_down_button.pack(side='left', padx=5)
 # -------------portion buttons------------------
 # prt1_button = tk.Button(button_frame, text="prt1", command=lambda: prt_action("prt1"))
