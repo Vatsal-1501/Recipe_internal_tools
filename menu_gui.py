@@ -8,6 +8,8 @@ import io
 import zipfile
 import json
 import shutil
+import re
+import random  
 
 # Global variables
 ingredient_data = None  # Data for the ingredients table
@@ -683,147 +685,147 @@ def update_action_audio(row, col, new_value, frame):
             weight = str(instruction_data[row][3]).strip()
             instruction_data[row][12] = f"{new_value} {text} {weight}".strip()
 
+
+
 def save_json():
     global data, ingredient_data, instruction_data
-    file_path = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON Files", "*.json")])
-    if not file_path:
-        return
-    try:
+
+    initial_name = data.get("name", [""])[0] if isinstance(data.get("name"), list) else data.get("name", "")
+    recipe_name = initial_name.strip() or "Unknown Recipe"
+    recipe_id = random.randint(1, 999)
+
+    dialog = tk.Toplevel(root)
+    dialog.title("Enter Recipe Metadata")
+
+    # Only editable fields
+    meta_fields = {
+        "name": tk.StringVar(value=recipe_name),
+        "category": tk.StringVar(value=str(data.get("category", "0"))),
+        "description": tk.StringVar(value=str(data.get("description", ""))),
+        "difficulty": tk.StringVar(value=str(data.get("difficulty", "Easy"))),
+        "id": tk.StringVar(value=str(recipe_id)),
+        "imageUrl": tk.StringVar(value=str(data.get("imageUrl", ""))),
+        "isSelected": tk.StringVar(value="False"),
+        "subCategories": tk.StringVar(value=str(data.get("subCategories", ""))),
+        "tags": tk.StringVar(value=str(data.get("tags", "")))
+    }
+
+    row_idx = 0
+    entries = {}
+
+    for field, var in meta_fields.items():
+        tk.Label(dialog, text=field).grid(row=row_idx, column=0, sticky='e', padx=5, pady=2)
+
+        if field == "difficulty":
+            combo = ttk.Combobox(dialog, textvariable=var, values=["Easy", "Medium", "Hard"], state="readonly")
+            combo.grid(row=row_idx, column=1, padx=5, pady=2, sticky='w')
+            entries[field] = combo
+        elif field == "isSelected":
+            combo = ttk.Combobox(dialog, textvariable=var, values=["True", "False"], state="readonly")
+            combo.grid(row=row_idx, column=1, padx=5, pady=2, sticky='w')
+            entries[field] = combo
+        else:
+            entry = tk.Entry(dialog, textvariable=var, width=40)
+            entry.grid(row=row_idx, column=1, padx=5, pady=2, sticky='w')
+            entries[field] = entry
+
+        row_idx += 1
+
+    def on_ok():
+        name_val = meta_fields["name"].get().strip() or "Unknown Recipe"
+        safe_name = re.sub(r'[<>:"/\\|?*]', "_", name_val)
+
         updated_data = {
-            "name": ["Unknown Recipe"],
-            "audio1": [""],
-            "audio2": [""],
-            "category": "0",
-            "description": "",
-            "difficulty": "Easy",
-            "id": 0,
-            "imageUrl": "",
-            "isSelected": False,
-            "subCategories": "",
-            "tags": "",
+            "name": [name_val],
+            "audio1": [name_val],               # auto set from name
+            "audio2": ["cook"],                 # auto set to "cook"
+            "category": meta_fields["category"].get().strip(),
+            "description": meta_fields["description"].get().strip(),
+            "difficulty": meta_fields["difficulty"].get().strip(),
+            "id": int(meta_fields["id"].get().strip()),
+            "imageUrl": meta_fields["imageUrl"].get().strip(),
+            "isSelected": meta_fields["isSelected"].get().strip().lower() == "true",
+            "subCategories": meta_fields["subCategories"].get().strip(),
+            "tags": meta_fields["tags"].get().strip(),
             "Ingredients": [],
             "Instruction": []
         }
-        if isinstance(data, dict):
-            updated_data["name"] = [data.get("name", ["Unknown Recipe"])[0]] if isinstance(data.get("name"), list) else [data.get("name", "Unknown Recipe")]
-            updated_data["audio1"] = data.get("audio1", [""])
-            updated_data["audio2"] = data.get("audio2", [""])
-            updated_data["category"] = str(data.get("category", "0"))
-            updated_data["description"] = str(data.get("description", ""))
-            updated_data["difficulty"] = str(data.get("difficulty", "Easy"))
-            updated_data["id"] = int(data.get("id", 0))
-            updated_data["imageUrl"] = str(data.get("imageUrl", ""))
-            updated_data["isSelected"] = bool(data.get("isSelected", False))
-            updated_data["subCategories"] = str(data.get("subCategories", ""))
-            updated_data["tags"] = str(data.get("tags", ""))
-        current_id = 1
-        if isinstance(ingredient_data, list) and len(ingredient_data) > 1:
-            for i in range(1, len(ingredient_data)):
-                row = ingredient_data[i]
-                if not isinstance(row, list) or len(row) == 0:
-                    continue
-                ingredient_name = str(row[0]).strip()
-                if not ingredient_name or ingredient_name == "New Ingredient":
-                    continue
-                ingredient = {
-                    "app_audio": "",
-                    "audio": "",
-                    "audioI": "",
-                    "audioP": "",
-                    "audioQ": "",
-                    "audioU": "",
-                    "id": current_id,
-                    "image": "",
-                    "text": "",
-                    "title": "",
-                    "weight": ""
-                }
-                ingredient["title"] = ingredient_name
-                ingredient["weight"] = str(row[1]) if len(row) > 1 else ""
-                ingredient["app_audio"] = str(row[2]) if len(row) > 2 else ""
-                ingredient["audio"] = str(row[3]) if len(row) > 3 else ""
-                ingredient["audioI"] = str(row[4]) if len(row) > 4 else ""
-                ingredient["audioP"] = str(row[5]) if len(row) > 5 else ""
-                weight_parts = ingredient["weight"].split()
-                ingredient["audioQ"] = weight_parts[0] if len(weight_parts) > 0 else ""
-                ingredient["audioU"] = weight_parts[1] if len(weight_parts) > 1 else ""
-                ingredient["image"] = str(row[8]) if len(row) > 8 else ""
-                ingredient["text"] = str(row[9]) if len(row) > 9 else ""
-                updated_data["Ingredients"].append(ingredient)
-                current_id += 1
-        current_id = 1
-        if isinstance(instruction_data, list) and len(instruction_data) > 1:
-            for i in range(1, len(instruction_data)):
-                row = instruction_data[i]
-                if not isinstance(row, list) or len(row) <= 2 or not row[2].strip():
-                    continue
-                instruction = {
-                    "Audio": "",
-                    "Indtime_lid_con": "",
-                    "Induction_on_time": "0",
-                    "Induction_power": "0",
-                    "Magnetron_on_time": "0",
-                    "Magnetron_power": "0",
-                    "Text": "",
-                    "Weight": "",
-                    "app_audio": "",
-                    "audioI": "",
-                    "audioP": "",
-                    "audioQ": "",
-                    "audioU": "",
-                    "durationInSec": 0,
-                    "id": current_id,
-                    "image": "",
-                    "lid": "",
-                    "mag_severity": "",
-                    "pump_on": "0",
-                    "skip": "false",
-                    "stirrer_on": "0",
-                    "wait_time": "0",
-                    "warm_time": "0",
-                    "threshold": "0",
-                    "purge_on": "0"
-                }
-                field_mapping = {
-                    1: "Audio",
-                    2: "Text",
-                    3: "Weight",
-                    4: "Induction_on_time",
-                    5: "Induction_power",
-                    6: "Magnetron_on_time",
-                    7: "Magnetron_power",
-                    8: "durationInSec",
-                    9: "stirrer_on",
-                    10: "pump_on",
-                    11: "lid",
-                    12: "app_audio",
-                    13: "audioI",
-                    14: "audioP",
-                    15: "audioQ",
-                    16: "audioU",
-                    17: "skip",
-                    18: "mag_severity",
-                    19: "Indtime_lid_con",
-                    20: "threshold",
-                    21: "purge_on",
-                    22: "wait_time",
-                    23: "warm_time"
-                }
-                for idx, field in field_mapping.items():
-                    if idx < len(row):
-                        if field == "durationInSec":
-                            instruction[field] = int(row[idx]) if str(row[idx]).isdigit() else 0
-                        else:
-                            instruction[field] = str(row[idx])
-                updated_data["Instruction"].append(instruction)
-                current_id += 1
-        with open(file_path, 'w') as file:
-            json.dump(updated_data, file, indent=2)
-        messagebox.showinfo("Success", "Data saved successfully!")
-    except Exception as e:
-        messagebox.showerror("Error", f"An error occurred while saving: {str(e)}")
-        import traceback
-        traceback.print_exc()
+
+        # Ingredients
+        for i, row in enumerate(ingredient_data[1:], start=1):
+            title = str(row[0]).strip()
+            if not title or title == "New Ingredient":
+                continue
+            weight = str(row[1]).strip()
+            audio = str(row[3]).strip()
+            audioI = str(row[4]).strip()
+            audioP = str(row[5]).strip()
+            audioQ = str(row[6]).strip()
+            audioU = str(row[7]).strip()
+            image = str(row[8]).strip()
+            text = str(row[9]).strip()
+            updated_data["Ingredients"].append({
+                "id": i,
+                "title": title,
+                "weight": weight,
+                "app_audio": f"{audio} {title} {weight}".strip(),
+                "audio": audio,
+                "audioI": title,
+                "audioP": audio,
+                "audioQ": audioQ,
+                "audioU": audioU,
+                "image": image,
+                "text": text,
+                "pan_type": "SS"
+            })
+
+        # Instructions
+        for i, row in enumerate(instruction_data[1:], start=1):
+            get = lambda idx: str(row[idx]).strip() if idx < len(row) else ""
+            get_int = lambda idx: int(row[idx]) if idx < len(row) and str(row[idx]).isdigit() else 0
+            updated_data["Instruction"].append({
+                "id": i,
+                "Text": get(2),
+                "Weight": get(3),
+                "Audio": get(1),
+                "app_audio": f"{get(1)} {get(2)}".strip(),
+                "audioI": get(13),
+                "audioP": get(14),
+                "audioQ": get(15),
+                "audioU": get(16),
+                "Induction_on_time": get(4),
+                "Induction_power": get(5),
+                "Magnetron_on_time": get(6),
+                "Magnetron_power": get(7),
+                "durationInSec": get_int(8),
+                "stirrer_on": get(9),
+                "pump_on": get(10),
+                "lid": get(11),
+                "Indtime_lid_con": get(19),
+                "threshold": get(20),
+                "purge_on": get(21),
+                "wait_time": get(22),
+                "warm_time": get(23),
+                "skip": get(17),
+                "mag_severity": get(18),
+                "image": ""
+            })
+
+        folder = filedialog.askdirectory(title="Select Folder To Save")
+        if not folder:
+            return
+        zip_path = os.path.join(folder, f"{safe_name}.zip")
+        try:
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr(f"{safe_name}.txt", json.dumps(updated_data, indent=2))
+            messagebox.showinfo("Saved", f"{safe_name}.zip saved to:\n{folder}")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+        dialog.destroy()
+
+    tk.Button(dialog, text="OK", command=on_ok).grid(row=row_idx, column=0, pady=8)
+    tk.Button(dialog, text="Cancel", command=dialog.destroy).grid(row=row_idx, column=1, pady=8)
+
 
 def prt_action(part_name):
     print(f"{part_name} button clicked")
